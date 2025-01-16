@@ -1,0 +1,37 @@
+name: Packer Build
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packer:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout your repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Install HashiCorp Packer
+      - name: Install Packer
+        uses: hashicorp/setup-packer@v2
+        with:
+          packer_version: 1.11.2
+
+      # Step 3: Install QEMU
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system
+
+      - name: Initialize Packer plugins
+        run: packer init packer/ubuntu/
+
+      # Run Packer build
+      - name: Build with Packer
+        run: packer build ./packer/ubuntu/
+

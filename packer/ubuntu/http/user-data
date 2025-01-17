@@ -1,0 +1,47 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_GB.UTF-8
+  keyboard:
+    layout: gb
+  ssh:
+    install-server: true
+    allow-pw: true
+    disable_root: true
+    ssh_quiet_keygen: true
+    allow_public_ssh_keys: true
+  package_reboot_if_required: true
+  package_update: true
+  package_upgrade: false
+  updates: all
+  packages:
+    - cloud-guest-utils
+    - cloud-init
+    - cloud-utils
+    - qemu-guest-agent
+    - tuned
+    - tuned-utils
+    - tuned-utils-systemtap
+    - openssh-server
+  runcmd:
+    - systemctl enable ssh
+    - systemctl start ssh
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+  user-data:
+    package_upgrade: false
+    timezone: Europe/London
+    users:
+      - name: testuser
+        groups: [adm, sudo]
+        lock-passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        passwd: testpassword
+  late-commands:
+    - sed -i '/^\/swap.img/d' /target/etc/fstab
+    - swapoff -a
+    - rm -rf /target/swap.img

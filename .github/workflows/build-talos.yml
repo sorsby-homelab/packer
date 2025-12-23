@@ -1,0 +1,82 @@
+name: Build Talos Image
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      PACKER_LOG: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@v3
+        with:
+          version: "1.10.0"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Talos in Docker
+        run: |
+          docker run --rm -v $PWD:/workspace -w /workspace ubuntu:22.04 bash -c "
+          set -e
+          # Install dependencies
+          apt-get update && apt-get install -y curl unzip qemu qemu-system qemu-utils build-essential \
+          && rm -rf /var/lib/apt/lists/*
+        
+          curl -fsSL https://releases.hashicorp.com/packer/1.14.3/packer_1.14.3_linux_amd64.zip -o packer.zip \
+          && unzip -o packer.zip -d /usr/local/bin/ \
+          && rm packer.zip
+        
+          # Verify installs
+          packer version
+          qemu-system-x86_64 --version || true
+        
+          # Run Packer
+          export PACKER_LOG=1
+          packer init packer
+          packer build packer
+          "
+
+      - name: Upload Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: talos-image
+          path: packer/output/**/*.qcow2
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: talos-image
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('beta-{0}', github.run_id) }}
+          name: ${{ github.ref == 'refs/heads/main' && 'Talos Release' || 'Talos Beta Release' }}
+          draft: false
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Upload Talos QCOW2 artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/talos.qcow2
+          asset_name: talos.qcow2
+          asset_content_type: application/octet-stream
+

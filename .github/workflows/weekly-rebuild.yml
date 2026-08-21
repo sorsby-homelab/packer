@@ -1,0 +1,68 @@
+name: Weekly Rocky Image Rebuild
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"
+
+jobs:
+  build:
+    runs-on: ghrunner1
+    environment: pve1
+    permissions:
+      contents: read
+    env:
+      PROXMOX_URL: ${{ vars.PROXMOX_URL }}
+      PROXMOX_USERNAME: ${{ secrets.PROXMOX_USERNAME }}
+      PROXMOX_TOKEN: ${{ secrets.PROXMOX_TOKEN }}
+      PROXMOX_NODE: ${{ vars.PROXMOX_NODE }}
+      PROXMOX_ISO_URL: ${{ vars.PROXMOX_ISO_URL }}
+      PROXMOX_ISO_CHECKSUM: ${{ vars.PROXMOX_ISO_CHECKSUM }}
+      PROXMOX_ISO_STORAGE_POOL: ${{ vars.PROXMOX_ISO_STORAGE_POOL }}
+      PROXMOX_INSECURE_TLS: ${{ vars.PROXMOX_INSECURE_TLS }}
+      PROXMOX_BRIDGE: ${{ vars.PROXMOX_BRIDGE }}
+      PROXMOX_STORAGE_POOL: ${{ vars.PROXMOX_STORAGE_POOL }}
+      TEMPLATE_NAME_PREFIX: ${{ vars.TEMPLATE_NAME_PREFIX }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+      PACKER_SSH_PASSWORD: ${{ secrets.PACKER_SSH_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@v3
+
+      - name: Validate required environment config
+        run: bash tests/validate-secrets.sh
+
+      - name: Generate Packer vars file
+        run: |
+          cat > "${RUNNER_TEMP}/weekly.auto.pkrvars.hcl" <<EOF
+          proxmox_url          = "${PROXMOX_URL}"
+          proxmox_username     = "${PROXMOX_USERNAME}"
+          proxmox_token        = "${PROXMOX_TOKEN}"
+          proxmox_node         = "${PROXMOX_NODE}"
+          proxmox_insecure_tls = ${PROXMOX_INSECURE_TLS:-false}
+          proxmox_iso_url      = "${PROXMOX_ISO_URL}"
+          proxmox_iso_checksum = "${PROXMOX_ISO_CHECKSUM:-file:https://download.rockylinux.org/pub/rocky/9/isos/x86_64/CHECKSUM}"
+          proxmox_iso_storage_pool = "${PROXMOX_ISO_STORAGE_POOL:-local}"
+          template_name_prefix = "${TEMPLATE_NAME_PREFIX:-rocky9-cloudinit}"
+          vm_bridge            = "${PROXMOX_BRIDGE:-vmbr0}"
+          vm_storage_pool      = "${PROXMOX_STORAGE_POOL:-local-lvm}"
+          ssh_username         = "${SSH_USERNAME:-root}"
+          ssh_password         = "${PACKER_SSH_PASSWORD}"
+          EOF
+
+      - name: Packer init
+        run: packer init packer/rocky9-proxmox.pkr.hcl
+
+      - name: Packer build
+        run: packer build -var-file="${RUNNER_TEMP}/weekly.auto.pkrvars.hcl" packer/rocky9-proxmox.pkr.hcl
+
+      - name: Remove temporary Packer vars file
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/weekly.auto.pkrvars.hcl"

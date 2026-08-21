@@ -1,0 +1,15 @@
+proxmox_url          = "https://pve.example.com:8006/api2/json"
+proxmox_username     = "packer@pve!packer-token"
+proxmox_token        = "replace-with-token-secret"
+proxmox_node         = "pve"
+proxmox_insecure_tls = false
+proxmox_iso_url      = "https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9-latest-x86_64-minimal.iso"
+proxmox_iso_checksum = "file:https://download.rockylinux.org/pub/rocky/9/isos/x86_64/CHECKSUM"
+proxmox_iso_storage_pool = "local"
+
+template_name_prefix = "rocky9-cloudinit"
+vm_bridge            = "vmbr0"
+vm_storage_pool      = "local-lvm"
+
+ssh_username         = "root"
+ssh_password         = "packer"
